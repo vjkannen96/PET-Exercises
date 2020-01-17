@@ -36,6 +36,9 @@ def encrypt_message(K, message):
     plaintext = message.encode("utf8")
     
     ## YOUR CODE HERE
+    aes = Cipher("aes-128-gcm")
+    iv = urandom(16)
+    ciphertext, tag = aes.quick_gcm_enc(K, iv, message)
 
     return (iv, ciphertext, tag)
 
@@ -45,6 +48,8 @@ def decrypt_message(K, iv, ciphertext, tag):
         In case the decryption fails, throw an exception.
     """
     ## YOUR CODE HERE
+    aes = Cipher("aes-128-gcm")
+    plain = aes.quick_gcm_dec(K, iv, ciphertext, tag)
 
     return plain.encode("utf8")
 
@@ -102,6 +107,15 @@ def point_add(a, b, p, x0, y0, x1, y1):
 
     # ADD YOUR CODE BELOW
     xr, yr = None, None
+    if is_point_on_curve(a, b, p, x0, y0) and is_point_on_curve(a, b, p, x1, y1):
+        if x0 == x1 and y0 == y1:
+            pass #raise an exception
+        else:
+            lam = ((y1 - y0) * (x1 - x0).pow(-1)) % p
+            xr = (lam.pow(2) - x0 - x1)  % p
+            yr = (lam * (x0 - xr) - y0) % p
+    else:
+       pass #do something else, maybe do nothing at all? who knows?
     
     return (xr, yr)
 
@@ -119,6 +133,12 @@ def point_double(a, b, p, x, y):
 
     # ADD YOUR CODE BELOW
     xr, yr = None, None
+    if is_point_on_curve(a, b, p, x, y):
+        lam = ((3 * x.pow(2) + a) * (2 * y).pow(-1)) % p
+        xr = (lam.pow(2) - 2 * x) % p
+        yr = (lam * (x - xr) - y) % p
+    else:
+        pass #do something else
 
     return xr, yr
 
@@ -140,8 +160,10 @@ def point_scalar_multiplication_double_and_add(a, b, p, x, y, scalar):
     P = (x, y)
 
     for i in range(scalar.num_bits()):
-        pass ## ADD YOUR CODE HERE
-
+        ## ADD YOUR CODE HERE
+        if i == 1:
+            Q = point_add(a, b, p, Q[0], Q[1], P[0], P[1])
+        P = point_double(a, b, p, P[0], P[1])
     return Q
 
 def point_scalar_multiplication_montgomerry_ladder(a, b, p, x, y, scalar):
@@ -166,7 +188,13 @@ def point_scalar_multiplication_montgomerry_ladder(a, b, p, x, y, scalar):
     R1 = (x, y)
 
     for i in reversed(range(0,scalar.num_bits())):
-        pass ## ADD YOUR CODE HERE
+        ## ADD YOUR CODE HERE#
+        if i == 0:
+            R1 = point_add(a, b, p, R0[0], R0[1], R1[0], R1[1])
+            R0 = point_double(a, b, p, R0[0], R0[1])
+        else:
+            R0 = point_add(a, b, p, R0[0], R0[1], R1[0], R1[0])
+            R1 = point_double(a, b, p, R1[0], R1[1])
 
     return R0
 
@@ -197,6 +225,8 @@ def ecdsa_sign(G, priv_sign, message):
     plaintext =  message.encode("utf8")
 
     ## YOUR CODE HERE
+    digest = sha256(plaintext).digest()
+    sig = do_ecdsa_sign(G, priv_sign, digest)
 
     return sig
 
@@ -205,6 +235,7 @@ def ecdsa_verify(G, pub_verify, message, sig):
     plaintext =  message.encode("utf8")
 
     ## YOUR CODE HERE
+    res = do_ecdsa_verify(G, pub_verify, sig, message)
 
     return res
 
