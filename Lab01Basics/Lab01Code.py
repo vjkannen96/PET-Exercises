@@ -38,7 +38,7 @@ def encrypt_message(K, message):
     ## YOUR CODE HERE
     aes = Cipher("aes-128-gcm")
     iv = urandom(16)
-    ciphertext, tag = aes.quick_gcm_enc(K, iv, message)
+    ciphertext, tag = aes.quick_gcm_enc(K, iv, plaintext)
 
     return (iv, ciphertext, tag)
 
@@ -81,9 +81,9 @@ def is_point_on_curve(a, b, p, x, y):
     assert isinstance(b, Bn)
     assert isinstance(p, Bn) and p > 0
     assert (isinstance(x, Bn) and isinstance(y, Bn)) \
-           or (x == None and y == None)
+           or (x is None and y is None)
 
-    if x == None and y == None:
+    if x is None and y is None:
         return True
 
     lhs = (y * y) % p
