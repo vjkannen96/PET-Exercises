@@ -109,7 +109,7 @@ def point_add(a, b, p, x0, y0, x1, y1):
     xr, yr = None, None
     if is_point_on_curve(a, b, p, x0, y0) and is_point_on_curve(a, b, p, x1, y1):
         if x0 == x1 and y0 == y1:
-            pass #raise an exception
+            raise ArithmeticError("Points are equal\n")
         else:
             lam = ((y1 - y0) * (x1 - x0).pow(-1)) % p
             xr = (lam.pow(2) - x0 - x1)  % p
