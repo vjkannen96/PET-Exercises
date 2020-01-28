@@ -36,8 +36,14 @@ def encrypt_message(K, message):
     plaintext = message.encode("utf8")
     
     ## YOUR CODE HERE
-    aes = Cipher("aes-128-gcm")
-    iv = urandom(16)
+    if len(K)*8 ==128:
+        aes = Cipher("aes-128-gcm")
+        iv = urandom(16)
+    elif len(K)*8 == 256:
+        aes = Cipher("aes-256-gcm")
+        iv = urandom(32)
+    else:
+        raise Exception("unsupported key size")
     ciphertext, tag = aes.quick_gcm_enc(K, iv, plaintext)
 
     return (iv, ciphertext, tag)
@@ -48,7 +54,12 @@ def decrypt_message(K, iv, ciphertext, tag):
         In case the decryption fails, throw an exception.
     """
     ## YOUR CODE HERE
-    aes = Cipher("aes-128-gcm")
+    if len(K)*8 ==128:
+        aes = Cipher("aes-128-gcm")
+    elif len(K)*8 == 256:
+        aes = Cipher("aes-256-gcm")
+    else:
+        raise Exception("unsupported key size")
     plain = aes.quick_gcm_dec(K, iv, ciphertext, tag)
 
     return plain.encode("utf8")
@@ -106,17 +117,19 @@ def point_add(a, b, p, x0, y0, x1, y1):
     """
 
     # ADD YOUR CODE BELOW
-    xr, yr = None, None
-    if is_point_on_curve(a, b, p, x0, y0) and is_point_on_curve(a, b, p, x1, y1):
-        if x0 == x1 and y0 == y1:
-            raise ArithmeticError("Points are equal\n")
-        else:
-            lam = ((y1 - y0) * (x1 - x0).pow(-1)) % p
-            xr = (lam.pow(2) - x0 - x1)  % p
-            yr = (lam * (x0 - xr) - y0) % p
+    # xr, yr = None, None
+    if x0 is x1 and y0 == y1:
+        raise Exception("EC Points must not be equal")
+    elif x0 is None and y0 is None:
+        return (x1, y1)
+    elif x1 is None and y1 is None:
+        return (x0, y0)
+    elif x0 == x1 and y0 == (-y1 % p):
+        return (None, None)
     else:
-       pass #do something else, maybe do nothing at all? who knows?
-    
+        lam = ((y1 - y0)*(x1 - x0).mod_inverse(p)) % p
+        xr = (lam*lam - x0 - x1) % p
+        yr = (lam * (x0 - xr) - y0) % p
     return (xr, yr)
 
 def point_double(a, b, p, x, y):
@@ -132,15 +145,14 @@ def point_double(a, b, p, x, y):
     """  
 
     # ADD YOUR CODE BELOW
-    xr, yr = None, None
-    if is_point_on_curve(a, b, p, x, y):
-        lam = ((3 * x.pow(2) + a) * (2 * y).pow(-1)) % p
-        xr = (lam.pow(2) - 2 * x) % p
-        yr = (lam * (x - xr) - y) % p
+    # xr, yr = None, None
+    if x is None and y is None:
+        return (None, None)
     else:
-        pass #do something else
-
-    return xr, yr
+        lam = ((3 * (x*x) + a) * (2 * y).mod_inverse(p)) % p
+        xr = (lam*lam - 2 * x) % p
+        yr = (lam * (x - xr) - y) % p
+        return xr, yr
 
 def point_scalar_multiplication_double_and_add(a, b, p, x, y, scalar):
     """
@@ -161,7 +173,7 @@ def point_scalar_multiplication_double_and_add(a, b, p, x, y, scalar):
 
     for i in range(scalar.num_bits()):
         ## ADD YOUR CODE HERE
-        if i == 1:
+        if scalar.is_bit_set(i):
             Q = point_add(a, b, p, Q[0], Q[1], P[0], P[1])
         P = point_double(a, b, p, P[0], P[1])
     return Q
@@ -189,11 +201,11 @@ def point_scalar_multiplication_montgomerry_ladder(a, b, p, x, y, scalar):
 
     for i in reversed(range(0,scalar.num_bits())):
         ## ADD YOUR CODE HERE#
-        if i == 0:
+        if not scalar.is_bit_set(i):
             R1 = point_add(a, b, p, R0[0], R0[1], R1[0], R1[1])
             R0 = point_double(a, b, p, R0[0], R0[1])
         else:
-            R0 = point_add(a, b, p, R0[0], R0[1], R1[0], R1[0])
+            R0 = point_add(a, b, p, R0[0], R0[1], R1[0], R1[1])
             R1 = point_double(a, b, p, R1[0], R1[1])
 
     return R0
@@ -233,9 +245,9 @@ def ecdsa_sign(G, priv_sign, message):
 def ecdsa_verify(G, pub_verify, message, sig):
     """ Verify the ECDSA signature on the message """
     plaintext =  message.encode("utf8")
-
+    digest = sha256(plaintext).digest()
     ## YOUR CODE HERE
-    res = do_ecdsa_verify(G, pub_verify, sig, message)
+    res = do_ecdsa_verify(G, pub_verify, sig, digest)
 
     return res
 
@@ -265,7 +277,15 @@ def dh_encrypt(pub, message, aliceSig = None):
     """
     
     ## YOUR CODE HERE
-    pass
+    G, alice_priv, alice_pub = dh_get_key()
+    shared_key = pub.pt_mul(alice_priv).export()
+    shared_key_digest = sha256(shared_key).digest()
+    iv, ciphertext, tag = encrypt_message(shared_key_digest, message)
+    if aliceSig is None:
+        sig = None
+    else:
+        sig = ecdsa_sign(G, alice_priv, message)
+    return (alice_pub,  iv, ciphertext, tag, sig)
 
 def dh_decrypt(priv, ciphertext, aliceVer = None):
     """ Decrypt a received message encrypted using your public key, 
@@ -273,7 +293,19 @@ def dh_decrypt(priv, ciphertext, aliceVer = None):
     the message came from Alice using her verification key."""
     
     ## YOUR CODE HERE
-    pass
+    G = EcGroup()
+
+    alice_pub, iv, alice_ciphertext, tag, alice_sig = ciphertext
+    shared_key = alice_pub.pt_mul(priv).export()
+    shared_key_digest = sha256(shared_key).digest()
+    plaintext = decrypt_message(shared_key_digest, iv, alice_ciphertext, tag)
+    if aliceVer is None:
+        verified = True
+    elif alice_sig is None:
+        verified = False
+    else:
+        verified = ecdsa_verify(G, alice_pub, plaintext, alice_sig)
+    return (plaintext, verified)
 
 ## NOTE: populate those (or more) tests
 #  ensure they run using the "py.test filename" command.
@@ -281,13 +313,54 @@ def dh_decrypt(priv, ciphertext, aliceVer = None):
 #  $ py.test-2.7 --cov-report html --cov Lab01Code Lab01Code.py 
 
 def test_encrypt():
-    assert False
+    G, bob_priv, bob_pub = dh_get_key()
+    message = u"Privacy Enhancing Technologies"
+
+    # Encrypt with a signature
+    alice_pub, iv, ciphertext, tag, sig = dh_encrypt(bob_pub, message, None)
+    assert ciphertext != message.encode("utf8")
+    assert sig is None
+    # Encrypt without a signature
+    alice_pub, iv, ciphertext, tag, sig = dh_encrypt(bob_pub, message, 1)
+    assert ciphertext != message.encode("utf8")
+    assert sig is not None
 
 def test_decrypt():
-    assert False
+    G, bob_priv, bob_pub = dh_get_key()
+    message = u"Privacy Enhancing Technologies"
+    # Test without a signature
+    ciphertext = dh_encrypt(bob_pub, message, None)
+    plaintext, verified = dh_decrypt(bob_priv, ciphertext, None)
+    assert plaintext.decode("utf8") == message
+    assert verified is True
+    # Test with a signature
+    ciphertext = dh_encrypt(bob_pub, message, 1)
+    plaintext, verified = dh_decrypt(bob_priv, ciphertext, 1)
+    assert plaintext.decode("utf8") == message
+    assert verified is True
 
 def test_fails():
-    assert False
+    G, bob_priv, bob_pub = dh_get_key()
+    _, bad_priv, bad_pub = dh_get_key()
+    message = u"Privacy Enhancing Technologies"
+    # Test decrypt with wrong key
+    ciphertext = dh_encrypt(bob_pub, message, None)
+    try:
+        plaintext, verified = dh_decrypt(bad_priv, ciphertext, None)
+    except Exception as e:
+        assert 'Cipher: decryption failed' in str(e)
+    # Test decrypt with missing signature
+    ciphertext = dh_encrypt(bob_pub, message, None)
+    plaintext, verified = dh_decrypt(bob_priv, ciphertext, 1)
+    assert plaintext.decode("utf8") == message
+    assert verified is False
+    # Test decrypt with wrong signature
+    ciphertext = dh_encrypt(bob_pub, message, None)
+    bad_sig = ecdsa_sign(G, bad_priv, message)
+    bad_ciphertext = ciphertext[0], ciphertext[1], ciphertext[2], ciphertext[3], bad_sig
+    plaintext, verified = dh_decrypt(bob_priv, ciphertext, 1)
+    assert plaintext.decode("utf8") == message
+    assert verified is False
 
 #####################################################
 # TASK 6 -- Time EC scalar multiplication
