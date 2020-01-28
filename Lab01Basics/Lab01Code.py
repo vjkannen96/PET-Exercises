@@ -316,11 +316,11 @@ def test_encrypt():
     G, bob_priv, bob_pub = dh_get_key()
     message = u"Privacy Enhancing Technologies"
 
-    # Encrypt with a signature
+    # Encrypt without a signature
     alice_pub, iv, ciphertext, tag, sig = dh_encrypt(bob_pub, message, None)
     assert ciphertext != message.encode("utf8")
     assert sig is None
-    # Encrypt without a signature
+    # Encrypt with a signature
     alice_pub, iv, ciphertext, tag, sig = dh_encrypt(bob_pub, message, 1)
     assert ciphertext != message.encode("utf8")
     assert sig is not None
