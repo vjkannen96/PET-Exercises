@@ -288,64 +288,55 @@ def mix_client_n_hop(public_keys, address, message):
     client_public_key  = private_key * G.generator()
 
     hmacs = []
+    new_public_keys = []
+    new_public_keys.append(public_keys[0])
+    blinding_factor = Bn(1)
 
-    for public_key in public_keys:
+    for public_key in public_keys[1:]:
         # ADD CODE HERE
-        First get a shared key
+        # First get a shared key
+        shared_element = private_key * new_public_keys[-1]
+        key_material = sha512(shared_element.export()).digest()
+        # Extract a blinding factor for the public_key
+        blinding_factor *= Bn.from_binary(key_material[48:])
+        new_ec_public_key = blinding_factor * public_key
+        new_public_keys.append(new_ec_public_key)
+    
+    address_cipher = address_plaintext
+    message_cipher = message_plaintext
+
+    for public_key in reversed(new_public_keys):
+        # First get a shared key
         shared_element = private_key * public_key
         key_material = sha512(shared_element.export()).digest()
 
         # Use different parts of the shared key for different operations
         hmac_key = key_material[:16]
         address_key = key_material[16:32]
-        message_key = key_material[32:48]
-
-        # Extract a blinding factor for the public_key
-        blinding_factor = Bn.from_binary(key_material[48:])
-        new_ec_public_key = blinding_factor * client_public_key
-
+        message_key = key_material[32:48]  
+        
         # Encrypt address & message
         iv = b"\x00"*16
-        address_cipher = aes_ctr_enc_dec(address_key, iv, address_plaintext)
-        message_cipher = aes_ctr_enc_dec(message_key, iv, message_plaintext)
 
-    # ## Check the HMAC
-    # h = Hmac(b"sha512", hmac_key)
+        address_cipher = aes_ctr_enc_dec(address_key, iv, address_cipher)
+        message_cipher = aes_ctr_enc_dec(message_key, iv, message_cipher)
+        
+        # Form the HMAC
+        h = Hmac(b"sha512", hmac_key)
+        
+        encrypted_hmacs = []
+        for i,other_mac in enumerate(hmacs):
+            iv = pack("H14s", i, b"\x00"*14)
+            hmac_cipher = aes_ctr_enc_dec(hmac_key, iv, other_mac)
+            h.update(hmac_cipher)
+            encrypted_hmacs.append(hmac_cipher)
+        
+        h.update(address_cipher)
+        h.update(message_cipher)
+        hmac = h.digest()[:20]
 
-    #     for other_mac in msg.hmacs[1:]:
-    #         h.update(other_mac)
+        hmacs = [hmac] + encrypted_hmacs
 
-    #     h.update(msg.address)
-    #     h.update(msg.message)
-
-    #     expected_mac = h.digest()
-
-    #     if not secure_compare(msg.hmacs[0], expected_mac[:20]):
-    #         raise Exception("HMAC check failure")
-
-    #     ## Decrypt the hmacs, address and the message
-    #     aes = Cipher("AES-128-CTR") 
-
-    #     # Decrypt hmacs
-    #     new_hmacs = []
-    #     for i, other_mac in enumerate(msg.hmacs[1:]):
-    #         # Ensure the IV is different for each hmac
-    #         iv = pack("H14s", i, b"\x00"*14)
-
-    #         hmac_plaintext = aes_ctr_enc_dec(hmac_key, iv, other_mac)
-    #         new_hmacs += [hmac_plaintext]
-
-    #     if final:
-    #         # Decode the address and message
-    #         address_len, address_full = unpack("!H256s", address_plaintext)
-    #         message_len, message_full = unpack("!H1000s", message_plaintext)
-
-    #         out_msg = (address_full[:address_len], message_full[:message_len])
-    #         out_queue += [out_msg]
-    #     else:
-    #         # Pass the new mix message to the next mix
-    #         out_msg = NHopMixMessage(new_ec_public_key, new_hmacs, address_plaintext, message_plaintext)
-    #         out_queue += [out_msg]
     return NHopMixMessage(client_public_key, hmacs, address_cipher, message_cipher)
 
 
@@ -395,8 +386,19 @@ def analyze_trace(trace, target_number_of_friends, target=0):
     """
 
     ## ADD CODE HERE
+    # List of people alice sent to
+    alice_sent = [] 
 
-    return []
+    likely_friends = []
+
+    for message in trace:
+        if target in message[0]:
+            alice_sent += message[1]
+    count = Counter(alice_sent)
+    most_common_targets = count.most_common(target_number_of_friends)
+    for target in most_common_targets:
+        likely_friends.append(target[0])
+    return likely_friends
 
 ## TASK Q1 (Question 1): The mix packet format you worked on uses AES-CTR with an IV set to all zeros. 
 #                        Explain whether this is a security concern and justify your answer.
