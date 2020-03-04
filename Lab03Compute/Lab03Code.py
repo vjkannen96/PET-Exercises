@@ -158,11 +158,11 @@ def corruptPubKey(params, priv, OtherPubKeys=[]):
         corrupt authority. """
     (G, g, h, o) = params
     
-    priv_key = priv * g
-    pub = -OtherPubKeys[0]
-    for i in range(1, len(OtherPubKeys)):
+    pub = priv * g
+
+    for i in range(0, len(OtherPubKeys)):
         pub = pub - OtherPubKeys[i]
-    pub = pub + priv_key
+
 
     return pub
 
