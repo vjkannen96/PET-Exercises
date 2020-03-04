@@ -177,8 +177,12 @@ def encode_vote(params, pub, vote):
         zero and the votes for one."""
     assert vote in [0, 1]
 
-    v0 = encrypt(params, pub, (1 - vote))
-    v1 = encrypt(params, pub, vote)
+    if vote == 0:
+        v0 = encrypt(params, pub, 1)
+        v1 = encrypt(params, pub, 0)
+    else:
+        v0 = encrypt(params, pub, 0)
+        v1 = encrypt(params, pub, 1)
 
     return (v0, v1)
 
